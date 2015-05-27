@@ -36,6 +36,7 @@ public class Master extends UntypedActor {
     int dumped_cluster_counter = 0;
     //map that stores all the domain_id->size received from the slaves
     Map<Integer,Integer> fullMap = new HashMap<Integer, Integer>();
+    int value=0;
     
     @Override
     public void onReceive(Object message) throws Exception {
@@ -53,8 +54,16 @@ public class Master extends UntypedActor {
         } else if (message instanceof DOMAIN_COMPUTATION_DONE) {
             domain_computation_done_cluster_counter++;
             Message.DOMAIN_COMPUTATION_DONE m = (Message.DOMAIN_COMPUTATION_DONE) message;
-//            System.out.println("map received with size="+m.domainsSize.size());
-            fullMap.putAll(m.domainsSize);
+
+            for (Map.Entry<Integer, Integer> entry : m.domainsSize.entrySet()) {
+                if(fullMap.containsKey(entry.getKey())){ //merge domains
+                    value = fullMap.get(entry.getKey()) + entry.getValue();
+                    fullMap.put(entry.getKey(),value);
+                } else {
+                    fullMap.put(entry.getKey(), entry.getValue());
+                }
+            }
+            
             if (domain_computation_done_cluster_counter == K) {
                 System.out.println("MASTER: All domain size received");
                 System.out.println("MASTER: Map size= "+fullMap.size());
@@ -79,9 +88,12 @@ public class Master extends UntypedActor {
                     //update load
                     load[min] += entry.getValue();           
                 }
+                for(int i=0; i< load.length; i++){
+                    System.out.println("load["+i+"]= "+load[i]);
+                }
                 for (ActorRef node : nodes.values()) {
                     //send to the slaves the domain -> partition assignment
-                    node.tell(new ASSIGNMENT(dom2part), self());
+                    node.tell(new ASSIGNMENT(dom2part, K), self());
                 }                
             }
         } else if (message instanceof DUMPED) {

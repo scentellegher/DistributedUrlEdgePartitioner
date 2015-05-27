@@ -33,25 +33,31 @@ public class Node extends UntypedActor{
         masterPath = mp ;
     }
     
+    File input;
+    BufferedReader br;
+    
+    //map that contains domain_id -> size
+    Map<Integer, Integer> map = new HashMap<Integer, Integer>();
+    
     THashMap <Integer, Integer> assignmentMap = new THashMap<Integer, Integer>();
     
     @Override
     public void onReceive(Object message) throws Exception {
+        input = new File("/home/cent/Desktop/webgraph/india2004/parts/part000"+id);
+        br = new BufferedReader(new FileReader(input));
+        String line;
+        String [] tmp;
+        
         if(message instanceof Message.REGISTER_NODE){
             getContext().actorSelection(masterPath).tell(new Message.REGISTER_NODE(id), self());
         } else if(message instanceof Message.START_DOMAIN_COMPUATATION){
             master = getSender();
             System.out.println("Node "+id+ " started domain computation");
             //domain size computation
-            File input = new File("/home/cent/Desktop/webgraph/india2004/parts/part000"+id);
-            BufferedReader br = new BufferedReader(new FileReader(input));
-            String line;
-            String [] tmp;
             int domain = 0;
             int old_domain=0;
             int dim = 0;
-            //map that contains domain_id -> size
-            Map<Integer, Integer> map = new HashMap<Integer, Integer>();
+            
             //compute domain sizes
             while((line = br.readLine())!=null){
                 tmp = line.split(" ");
@@ -67,6 +73,7 @@ public class Node extends UntypedActor{
             }
             map.put(old_domain, dim);
             br.close();
+            
             // send map to the master
             master.tell(new Message.DOMAIN_COMPUTATION_DONE(map), self());
         } else if(message instanceof Message.ASSIGNMENT){
@@ -76,8 +83,33 @@ public class Node extends UntypedActor{
             //dump based on assignment
             Message.ASSIGNMENT m = (Message.ASSIGNMENT) message;
             assignmentMap.putAll(m.dom2part);
-            System.out.println("Node "+id+ " assign size="+assignmentMap.size());
-            // HOW?????
+            
+            // dump the domains contained in my dataset part
+            br = new BufferedReader(new FileReader(input));
+            //open file writers for the partitions
+            FileWriter [] files = new FileWriter[m.K];
+            for(int i=0; i<m.K; i++){
+                files[i]= new FileWriter(new File("/home/cent/Desktop/webgraph/india2004/partitions/"+id+"part_" + i));
+            }
+            
+            int domain = 0;
+            String edge;
+            while((line = br.readLine())!=null){
+                tmp = line.split(" ");
+                domain = Integer.parseInt(tmp[0]);
+                if(map.containsKey(domain)){
+                    edge = tmp[1]+" "+tmp[2];
+                    files[assignmentMap.get(domain)].write(edge+"\n");
+                }
+            }
+           
+            // close file writers
+            for(int j=0; j<m.K; j++){
+                files[j].close();
+            }
+            br.close();
+            
+            // dumped!
             master.tell(new Message.DUMPED(), self());
         } else if (message instanceof Message.SHUTDOWN){
             getContext().system().shutdown();

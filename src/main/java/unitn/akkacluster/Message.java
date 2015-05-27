@@ -26,9 +26,11 @@ public class Message {
     
     public static class ASSIGNMENT implements Serializable{
         final Map<Integer, Integer> dom2part;
+        final int K;
 
-        public ASSIGNMENT(Map<Integer, Integer> assignment) {
+        public ASSIGNMENT(Map<Integer, Integer> assignment, int numOfPart) {
             dom2part = assignment;
+            K = numOfPart;
         }
     }
     
