@@ -89,7 +89,7 @@ public class Node extends UntypedActor{
             //open file writers for the partitions
             FileWriter [] files = new FileWriter[m.K];
             for(int i=0; i<m.K; i++){
-                files[i]= new FileWriter(new File("/home/cent/Desktop/webgraph/india2004/partitions/"+id+"part_" + i));
+                files[i]= new FileWriter(new File("/home/cent/Desktop/webgraph/india2004/partitions/node"+id+"_part_" + i));
             }
             
             int domain = 0;
