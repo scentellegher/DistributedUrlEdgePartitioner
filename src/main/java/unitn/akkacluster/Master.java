@@ -4,7 +4,15 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import akka.actor.UntypedActor;
 import akka.japi.Creator;
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import gnu.trove.map.hash.THashMap;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
@@ -30,6 +38,10 @@ public class Master extends UntypedActor {
         nodes = new HashMap();
     }
 
+    //aws credentials for s3
+    AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
+    AmazonS3 s3client = new AmazonS3Client(credentials);
+    
     int registered_cluster_counter = 0;
     int domain_computation_done_cluster_counter = 0;
     int dumped_cluster_counter = 0;
@@ -64,6 +76,11 @@ public class Master extends UntypedActor {
             }
             
             if (domain_computation_done_cluster_counter == K) {
+                
+                //create "parts" folder
+                String folderName = "parts";
+                createFolder("cent-dataset/india2004", folderName, s3client);
+                
                 System.out.println("MASTER: All domain size received");
                 System.out.println("MASTER: Map size= "+fullMap.size());
                 
@@ -119,5 +136,22 @@ public class Master extends UntypedActor {
             }
         }
         return min;
+    }
+    
+    //fuction that create a folder into a specific bucket
+    public static void createFolder(String bucketName, String folderName, AmazonS3 client) {
+        // create meta-data for your folder and set content-length to 0
+        ObjectMetadata metadata = new ObjectMetadata();
+        metadata.setContentLength(0);
+        
+        // create empty content
+        InputStream emptyContent = new ByteArrayInputStream(new byte[0]);
+        
+        // create a PutObjectRequest passing the folder name suffixed by /
+        PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName,
+                folderName + "/", emptyContent, metadata);
+        
+        // send request to S3 to create folder
+        client.putObject(putObjectRequest);
     }
 }

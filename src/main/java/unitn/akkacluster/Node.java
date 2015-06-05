@@ -5,11 +5,18 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import akka.actor.UntypedActor;
 import akka.japi.Creator;
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.S3Object;
 import gnu.trove.map.hash.THashMap;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -33,9 +40,7 @@ public class Node extends UntypedActor{
         masterPath = mp ;
     }
     
-    File input;
-    BufferedReader br;
-    
+        
     //map that contains domain_id -> size
     Map<Integer, Integer> map = new HashMap<Integer, Integer>();
     
@@ -43,8 +48,13 @@ public class Node extends UntypedActor{
     
     @Override
     public void onReceive(Object message) throws Exception {
-        input = new File("/home/cent/Desktop/webgraph/india2004/parts/part000"+id);
-        br = new BufferedReader(new FileReader(input));
+        
+        //aws credential for s3
+        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
+        AmazonS3 s3client = new AmazonS3Client(credentials);
+        S3Object object = s3client.getObject(new GetObjectRequest("cent-dataset/india2004", "part000"+id));
+        BufferedReader br = new BufferedReader(new InputStreamReader(object.getObjectContent()));
+        
         String line;
         String [] tmp;
         
@@ -85,7 +95,7 @@ public class Node extends UntypedActor{
             assignmentMap.putAll(m.dom2part);
             
             // dump the domains contained in my dataset part
-            br = new BufferedReader(new FileReader(input));
+            br = new BufferedReader(new InputStreamReader(object.getObjectContent()));
             //open file writers for the partitions
             FileWriter [] files = new FileWriter[m.K];
             for(int i=0; i<m.K; i++){
@@ -108,6 +118,14 @@ public class Node extends UntypedActor{
                 files[j].close();
             }
             br.close();
+            
+            System.out.println("Node "+id+" is uploading to s3...");
+            //upload partitions parts to S3
+            String fileName;
+            for(int i=0; i<m.K; i++){
+                fileName = "node"+id+"_part_" + i;
+                s3client.putObject(new PutObjectRequest("cent-dataset/india2004/parts", fileName, new File("/home/cent/Desktop/webgraph/india2004/partitions/node"+id+"_part_" + i)));
+            }            
             
             // dumped!
             master.tell(new Message.DUMPED(), self());
