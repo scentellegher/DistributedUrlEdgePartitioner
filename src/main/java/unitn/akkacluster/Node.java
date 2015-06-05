@@ -26,20 +26,22 @@ public class Node extends UntypedActor{
     private final int id; 
     private final String masterPath;
     private final String dataset;
+    private final String localDir;
     
-    public static Props props(final int id, final String mp, final String d) {
+    public static Props props(final int id, final String mp, final String d, final String l) {
         return Props.create(new Creator<Node>() {
             @Override
             public Node create() throws Exception {
-                return new Node(id,mp,d);
+                return new Node(id,mp,d,l);
             }
         });
     }
     
-    public Node(int id, String mp, String d){
+    public Node(int id, String mp, String d, String l){
         this.id = id;
         masterPath = mp ;
         dataset = d;
+        localDir = l;
     }
     
         
@@ -104,7 +106,7 @@ public class Node extends UntypedActor{
             //open file writers for the partitions
             FileWriter [] files = new FileWriter[m.K];
             for(int i=0; i<m.K; i++){
-                files[i]= new FileWriter(new File("/home/ubuntu/"+dataset+"/partitions/part_" + i + "_node_"+id));
+                files[i]= new FileWriter(new File("/home/ubuntu/datasets/"+localDir+"/partitions/part_" + i + "_node_"+id));
             }
             
             int domain = 0;
@@ -129,7 +131,7 @@ public class Node extends UntypedActor{
             String fileName;
             for(int i=0; i<m.K; i++){
                 fileName = "part_" + i +"_node_"+id;
-                s3client.putObject(new PutObjectRequest(dataset+"/parts", fileName, new File("/home/ubuntu/"+dataset+"/partitions/node"+id+"_part_" + i)));
+                s3client.putObject(new PutObjectRequest(dataset+"/parts", fileName, new File("/home/ubuntu/datasets/"+localDir+"/partitions/part_" + i + "_node_"+id)));
             }            
             
             // dumped!

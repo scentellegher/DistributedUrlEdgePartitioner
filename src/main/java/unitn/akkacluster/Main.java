@@ -22,7 +22,7 @@ public class Main {
     }
 
     //If I am the node, I need to connect with the master.
-    public static void node(int id, String dataset) {
+    public static void node(int id, String dataset, String localDir) {
         
         int port = 0; //random port
         Config config = ConfigFactory.parseString("akka.remote.netty.tcp.port=" + port)
@@ -32,13 +32,13 @@ public class Main {
         String masterPath = (String) config.getList("akka.cluster.seed-nodes").get(0).unwrapped() + "/user/master"; //read the path of Master Actor
 
         ActorSystem system = ActorSystem.create("ClusterSystem", config);
-        ActorRef node = system.actorOf(Node.props(id, masterPath, dataset), "node" + id);
+        ActorRef node = system.actorOf(Node.props(id, masterPath, dataset, localDir), "node" + id);
         node.tell(new REGISTER_NODE(id), null); //Tell the node actor to talk to the master node
     }
     
     public static void main(String[] argv) throws InterruptedException {
-        if(argv.length<3){
-            System.err.println("Usage: [ec2/local] [master/all/nodeid] [s3 folder path]");
+        if(argv.length<4){
+            System.err.println("Usage: [ec2/local] [master/all/nodeid] [s3 folder path] [local folder]");
             System.exit(1);
         }
         if(argv[0].equals("ec2")){
@@ -52,13 +52,13 @@ public class Main {
         } else if (argv[1].equals("all")) {
             master();
             Thread.sleep(5000);
-            node(0, argv[2]);
-            node(1, argv[2]);
-            node(2, argv[2]);
-            node(3, argv[2]);
+            node(0, argv[2], argv[3]);
+            node(1, argv[2], argv[3]);
+            node(2, argv[2], argv[3]);
+            node(3, argv[2], argv[3]);
         } else {
             int id = Integer.parseInt(argv[1]);
-            node(id, argv[2]);
+            node(id, argv[2], argv[3]);
         }
     }
 
