@@ -25,39 +25,38 @@ public class Node extends UntypedActor{
     private ActorRef master;
     private final int id; 
     private final String masterPath;
+    private final String dataset;
     
-    public static Props props(final int id, final String mp) {
+    public static Props props(final int id, final String mp, final String d) {
         return Props.create(new Creator<Node>() {
             @Override
             public Node create() throws Exception {
-                return new Node(id,mp);
+                return new Node(id,mp,d);
             }
         });
     }
     
-    public Node(int id, String mp){
+    public Node(int id, String mp, String d){
         this.id = id;
         masterPath = mp ;
+        dataset = d;
     }
     
         
     //map that contains domain_id -> size
     Map<Integer, Integer> map = new HashMap<Integer, Integer>();
-    
     THashMap <Integer, Integer> assignmentMap = new THashMap<Integer, Integer>();
+    
+    //aws credential for s3
+    AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
+    AmazonS3 s3client = new AmazonS3Client(credentials);   
+    
+    String line;
+    String [] tmp;
     
     @Override
     public void onReceive(Object message) throws Exception {
-        
-        //aws credential for s3
-        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
-        AmazonS3 s3client = new AmazonS3Client(credentials);
-        S3Object object = s3client.getObject(new GetObjectRequest("cent-dataset/india2004", "part000"+id));
-        BufferedReader br = new BufferedReader(new InputStreamReader(object.getObjectContent()));
-        
-        String line;
-        String [] tmp;
-        
+            
         if(message instanceof Message.REGISTER_NODE){
             getContext().actorSelection(masterPath).tell(new Message.REGISTER_NODE(id), self());
         } else if(message instanceof Message.START_DOMAIN_COMPUATATION){
@@ -67,6 +66,9 @@ public class Node extends UntypedActor{
             int domain = 0;
             int old_domain=0;
             int dim = 0;
+            
+            S3Object object = s3client.getObject(new GetObjectRequest(dataset, "part000"+id));
+            BufferedReader br = new BufferedReader(new InputStreamReader(object.getObjectContent()));
             
             //compute domain sizes
             while((line = br.readLine())!=null){
@@ -94,12 +96,15 @@ public class Node extends UntypedActor{
             Message.ASSIGNMENT m = (Message.ASSIGNMENT) message;
             assignmentMap.putAll(m.dom2part);
             
+            S3Object object = s3client.getObject(new GetObjectRequest(dataset, "part000"+id));
+            BufferedReader br = new BufferedReader(new InputStreamReader(object.getObjectContent()));
+            
             // dump the domains contained in my dataset part
             br = new BufferedReader(new InputStreamReader(object.getObjectContent()));
             //open file writers for the partitions
             FileWriter [] files = new FileWriter[m.K];
             for(int i=0; i<m.K; i++){
-                files[i]= new FileWriter(new File("/home/cent/Desktop/webgraph/india2004/partitions/node"+id+"_part_" + i));
+                files[i]= new FileWriter(new File("/home/ubuntu/"+dataset+"/partitions/part_" + i + "_node_"+id));
             }
             
             int domain = 0;
@@ -123,8 +128,8 @@ public class Node extends UntypedActor{
             //upload partitions parts to S3
             String fileName;
             for(int i=0; i<m.K; i++){
-                fileName = "node"+id+"_part_" + i;
-                s3client.putObject(new PutObjectRequest("cent-dataset/india2004/parts", fileName, new File("/home/cent/Desktop/webgraph/india2004/partitions/node"+id+"_part_" + i)));
+                fileName = "part_" + i +"_node_"+id;
+                s3client.putObject(new PutObjectRequest(dataset+"/parts", fileName, new File("/home/ubuntu/"+dataset+"/partitions/node"+id+"_part_" + i)));
             }            
             
             // dumped!
