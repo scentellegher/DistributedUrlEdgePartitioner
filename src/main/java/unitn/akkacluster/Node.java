@@ -17,6 +17,9 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.InputStreamReader;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,6 +48,9 @@ public class Node extends UntypedActor{
     }
     
         
+    long start, end;
+    DateFormat df = new SimpleDateFormat("mm:ss:SSS");
+    
     //map that contains domain_id -> size
     Map<Integer, Integer> map = new HashMap<Integer, Integer>();
     THashMap <Integer, Integer> assignmentMap = new THashMap<Integer, Integer>();
@@ -101,6 +107,9 @@ public class Node extends UntypedActor{
             S3Object object = s3client.getObject(new GetObjectRequest(dataset, "part000"+id));
             BufferedReader br = new BufferedReader(new InputStreamReader(object.getObjectContent()));
             
+            //start local dump
+            start = System.currentTimeMillis();
+                        
             // dump the domains contained in my dataset part
             br = new BufferedReader(new InputStreamReader(object.getObjectContent()));
             //open file writers for the partitions
@@ -126,6 +135,13 @@ public class Node extends UntypedActor{
             }
             br.close();
             
+            //end local dump
+            end = System.currentTimeMillis();
+            System.out.println("TIME LOCAL DUMP NODE "+id+ ": "+ df.format(new Date(end - start))); 
+            
+            //start s3 upload
+            start = System.currentTimeMillis();
+            
             System.out.println("Node "+id+" is uploading to s3...");
             //upload partitions parts to S3
             String fileName;
@@ -133,6 +149,10 @@ public class Node extends UntypedActor{
                 fileName = "part_" + i +"_node_"+id;
                 s3client.putObject(new PutObjectRequest(dataset+"/parts", fileName, new File("/home/ubuntu/datasets/"+localDir+"/partitions/part_" + i + "_node_"+id)));
             }            
+            
+            //end s3 upload
+            end = System.currentTimeMillis();
+            System.out.println("TIME S3 UPLOAD NODE "+id+ ": "+ df.format(new Date(end - start))); 
             
             // dumped!
             master.tell(new Message.DUMPED(), self());

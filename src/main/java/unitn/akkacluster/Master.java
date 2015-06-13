@@ -13,6 +13,9 @@ import com.amazonaws.services.s3.model.PutObjectRequest;
 import gnu.trove.map.hash.THashMap;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
@@ -38,6 +41,10 @@ public class Master extends UntypedActor {
         nodes = new HashMap();
     }
 
+    
+    long start, end;
+    DateFormat df = new SimpleDateFormat("mm:ss:SSS");
+    
     //aws credentials for s3
     AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
     AmazonS3 s3client = new AmazonS3Client(credentials);
@@ -57,6 +64,10 @@ public class Master extends UntypedActor {
             System.out.println("MASTER RECEIVED REGISTER " + id);
             registered_cluster_counter++;
             if (registered_cluster_counter == K) {
+                
+                // start domain computation 
+                start = System.currentTimeMillis();
+                
                 for (ActorRef node : nodes.values()) {
                     node.tell(new START_DOMAIN_COMPUATATION(), self());
                 }
@@ -65,7 +76,10 @@ public class Master extends UntypedActor {
         } else if (message instanceof DOMAIN_COMPUTATION_DONE) {
             domain_computation_done_cluster_counter++;
             Message.DOMAIN_COMPUTATION_DONE m = (Message.DOMAIN_COMPUTATION_DONE) message;
-
+            
+            //print map size for network usage
+            System.out.println("MAP <INT INT> SIZE (DOMCOMP): " + m.domainsSize.size());
+            
             for (Map.Entry<Integer, Integer> entry : m.domainsSize.entrySet()) {
                 if(fullMap.containsKey(entry.getKey())){ //merge domains
                     value = fullMap.get(entry.getKey()) + entry.getValue();
@@ -77,18 +91,30 @@ public class Master extends UntypedActor {
             
             if (domain_computation_done_cluster_counter == K) {
                 
+                //end domain computation
+                end = System.currentTimeMillis();
+                System.out.println("TIME DOMSIZE:"+ df.format(new Date(end - start)));
+                
                 //create "parts" folder
                 String folderName = "parts";
                 createFolder("cent-dataset/india2004", folderName, s3client);
                 
                 System.out.println("MASTER: All domain size received");
                 System.out.println("MASTER: Map size= "+fullMap.size());
+         
+                //start sort
+                start = System.currentTimeMillis();
                 
                 // sort the map by size in descending order
                 System.out.println("MASTER: sorting domains...");
                 ValueComparator bvc =  new ValueComparator(fullMap);
                 TreeMap<Integer, Integer> sortedDomains = new TreeMap<Integer, Integer>(bvc);
                 sortedDomains.putAll(fullMap);
+                
+                //end sorting
+                end = System.currentTimeMillis();
+                System.out.println("TIME SORT:"+ df.format(new Date(end - start)));                
+                
                 System.out.println("MASTER: block to partition assignment...");
                 
                 //greedy assignment
@@ -96,6 +122,9 @@ public class Master extends UntypedActor {
                 int[] load = new int[K];
                 Map<Integer, Integer> dom2part = new THashMap<Integer, Integer>();
 
+                //start greedy assignment
+                start = System.currentTimeMillis();
+                
                 for (Map.Entry<Integer, Integer> entry : sortedDomains.entrySet()) {
                     //return the index of the partition with the smallest load
                     min = selectMinLoad(load,K);
@@ -104,17 +133,36 @@ public class Master extends UntypedActor {
                     //update load
                     load[min] += entry.getValue();           
                 }
+                
+                // end greedy assignment
+                end = System.currentTimeMillis();
+                System.out.println("TIME GREEDY ASSIGN:"+ df.format(new Date(end - start)));
+                
+                
                 for(int i=0; i< load.length; i++){
                     System.out.println("load["+i+"]= "+load[i]);
                 }
                 for (ActorRef node : nodes.values()) {
                     //send to the slaves the domain -> partition assignment
                     node.tell(new ASSIGNMENT(dom2part, K), self());
+                    
+                    //print map size for network usage
+                    System.out.println("MAP INT INT SIZE (ASSIGN): " + dom2part.size());
                 }                
+                
+                // start dump partitions
+                start = System.currentTimeMillis();
+                System.out.println("TIME DUMP START:" +start);
+                
             }
         } else if (message instanceof DUMPED) {
             dumped_cluster_counter++;
             if (dumped_cluster_counter == K){
+                
+                // end dump partition
+                end = System.currentTimeMillis();
+                System.out.println("TIME DUMP END:"+ end);
+                
                System.out.println("MASTER: dumped!"); 
                for (ActorRef node : nodes.values()) {
                     node.tell(new SHUTDOWN(), self());
